@@ -10,13 +10,13 @@ const App = () => {
   const handleSubmit = (event) => {
     event.preventDefault()
 
-    // Tarkistetaan onko nimi jo luettelossa
+    // Tarkistetaan onko nimi luettelossa
     if (persons.some(person => person.name === newName)) {
       alert(`${newName} is already added to phonebook`)
       return
     }
 
-    // Lisätään uusi nimi listaan
+    //  Uusi nimi listaan
     const newPerson = { name: newName }
     setPersons(persons.concat(newPerson))
     setNewName('') // tyhjennetään syötekenttä
