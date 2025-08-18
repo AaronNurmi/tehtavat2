@@ -1,0 +1,196 @@
+import { useState, useEffect } from 'react'
+import personService from './services/persons'
+
+// Ilmoituskomponentti näyttää onnistumis- tai virheilmoitukset
+const Notification = ({ message, type }) => {
+  if (message === null) return null
+
+  const style = {
+    color: type === 'error' ? 'red' : 'green', // Virhe punaisena, muuten vihreänä
+    background: '#ddd',
+    fontSize: 16,
+    borderStyle: 'solid',
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10,
+  }
+
+  return <div style={style}>{message}</div>
+}
+
+// Hakukenttäkomponentti
+const Filter = ({ filter, handleFilterChange }) => (
+  <div>
+    filter shown with: <input value={filter} onChange={handleFilterChange} />
+  </div>
+)
+
+// Lomake uuden henkilön lisäämiseen
+const PersonForm = ({
+  newName,
+  newNumber,
+  handleNameChange,
+  handleNumberChange,
+  handleSubmit,
+}) => (
+  <form onSubmit={handleSubmit}>
+    <div>
+      name: <input value={newName} onChange={handleNameChange} />
+    </div>
+    <div>
+      number: <input value={newNumber} onChange={handleNumberChange} />
+    </div>
+    <div>
+      <button type="submit">add</button>
+    </div>
+  </form>
+)
+
+// Lista henkilöistä, joissa on poistonappi
+const Persons = ({ persons, handleDelete }) => (
+  <ul>
+    {persons.map((person) => (
+      <li key={person.id}>
+        {person.name} {person.number}{' '}
+        <button onClick={() => handleDelete(person.id, person.name)}>delete</button>
+      </li>
+    ))}
+  </ul>
+)
+
+const App = () => {
+  // Sovelluksen tilat
+  const [persons, setPersons] = useState([])
+  const [newName, setNewName] = useState('')
+  const [newNumber, setNewNumber] = useState('')
+  const [filter, setFilter] = useState('')
+
+  // Tilat ilmoituksia varten
+  const [notification, setNotification] = useState(null)
+  const [notificationType, setNotificationType] = useState('success') // 'success' tai 'error'
+
+  // Haetaan henkilöt palvelimelta komponentin latautuessa
+  useEffect(() => {
+    personService
+      .getAll()
+      .then(initialPersons => setPersons(initialPersons))
+      .catch(() => {
+        showNotification('Failed to fetch persons from server', 'error')
+      })
+  }, [])
+
+  // Näyttää ilmoituksen ja poistaa sen 5 sekunnin jälkeen
+  const showNotification = (message, type = 'success') => {
+    setNotification(message)
+    setNotificationType(type)
+    setTimeout(() => {
+      setNotification(null)
+    }, 5000)
+  }
+
+  // Lomakkeen lähetys — lisää tai päivittää henkilön tiedot
+  const handleSubmit = (event) => {
+    event.preventDefault()
+
+    const existingPerson = persons.find(p => p.name === newName)
+
+    if (existingPerson) {
+      // Henkilö löytyy, kysytään varmistus numeron päivittämiseen
+      if (
+        window.confirm(
+          `${newName} is already added to phonebook, replace the old number with a new one?`
+        )
+      ) {
+        const updatedPerson = { ...existingPerson, number: newNumber }
+        personService
+          .update(existingPerson.id, updatedPerson)
+          .then(returnedPerson => {
+            setPersons(persons.map(p => (p.id !== existingPerson.id ? p : returnedPerson)))
+            setNewName('')
+            setNewNumber('')
+            showNotification(`Updated number for ${returnedPerson.name}`, 'success')
+          })
+          .catch(() => {
+            showNotification(
+              `Information of ${newName} has already been removed from server`,
+              'error'
+            )
+            setPersons(persons.filter(p => p.id !== existingPerson.id))
+          })
+      }
+      return
+    }
+
+    // Jos Henkilöä ei löydy, lisätään uusi
+    const newPerson = { name: newName, number: newNumber }
+    personService
+      .create(newPerson)
+      .then(returnedPerson => {
+        setPersons(persons.concat(returnedPerson))
+        setNewName('')
+        setNewNumber('')
+        showNotification(`Added ${returnedPerson.name}`, 'success')
+      })
+      .catch(() => {
+        showNotification(
+          `Failed to add ${newName}. Please try again later.`,
+          'error'
+        )
+      })
+  }
+
+  // Poistotoiminto
+  const handleDelete = (id, name) => {
+    if (window.confirm(`Delete ${name}?`)) {
+      personService
+        .remove(id)
+        .then(() => {
+          setPersons(persons.filter(p => p.id !== id))
+          showNotification(`Deleted ${name}`, 'success')
+        })
+        .catch(() => {
+          showNotification(
+            `Information of ${name} has already been removed from server`,
+            'error'
+          )
+          setPersons(persons.filter(p => p.id !== id))
+        })
+    }
+  }
+
+  // Muutokset kenttiin tallennetaan
+  const handleNameChange = (event) => setNewName(event.target.value)
+  const handleNumberChange = (event) => setNewNumber(event.target.value)
+  const handleFilterChange = (event) => setFilter(event.target.value)
+
+  // Suodatetaan henkilöitä hakuehdolla (case insensitive)
+  const personsToShow = persons.filter(person =>
+    person.name.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  return (
+    <div>
+      <h2>Phonebook</h2>
+
+      <Notification message={notification} type={notificationType} />
+
+      <Filter filter={filter} handleFilterChange={handleFilterChange} />
+
+      <h3>Add a new</h3>
+
+      <PersonForm
+        newName={newName}
+        newNumber={newNumber}
+        handleNameChange={handleNameChange}
+        handleNumberChange={handleNumberChange}
+        handleSubmit={handleSubmit}
+      />
+
+      <h3>Numbers</h3>
+
+      <Persons persons={personsToShow} handleDelete={handleDelete} />
+    </div>
+  )
+}
+
+export default App
