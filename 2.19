@@ -1,0 +1,89 @@
+import { useState, useEffect } from 'react'
+import axios from 'axios'
+
+const App = () => {
+  // Koko maiden data
+  const [countries, setCountries] = useState([])
+  // Hakukentän sisältö
+  const [filter, setFilter] = useState('')
+  // Tila, joka pitää kirjaa, mikä maa on valittu "näytettäväksi"
+  const [selectedCountry, setSelectedCountry] = useState(null)
+
+  useEffect(() => {
+    axios
+      .get('https://studies.cs.helsinki.fi/restcountries/api/all')
+      .then((response) => setCountries(response.data))
+      .catch((error) => {
+        console.error('Failed to fetch countries:', error)
+      })
+  }, [])
+
+  const handleFilterChange = (event) => {
+    setFilter(event.target.value)
+    setSelectedCountry(null)  // Tyhjennetään valinta kun hakuehto muuttuu
+  }
+
+  // Suodatetaan maat hakuehdon mukaan
+  const filteredCountries = countries.filter((country) =>
+    country.name.common.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  // Näytetään yksittäisen maan tiedot
+  const CountryDetails = ({ country }) => {
+    const languages = country.languages
+      ? Object.values(country.languages)
+      : []
+
+    return (
+      <div>
+        <h2>{country.name.common}</h2>
+        <p>Capital: {country.capital ? country.capital[0] : 'N/A'}</p>
+        <p>Population: {country.population.toLocaleString()}</p>
+        <h3>Languages:</h3>
+        <ul>
+          {languages.map((lang) => (
+            <li key={lang}>{lang}</li>
+          ))}
+        </ul>
+        <img
+          src={country.flags.png}
+          alt={`Flag of ${country.name.common}`}
+          width="150"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h1>Country search</h1>
+      <div>
+        Find countries: <input value={filter} onChange={handleFilterChange} />
+      </div>
+
+      {filter === '' ? (
+        <p>Type something to search countries</p>
+      ) : filteredCountries.length > 10 ? (
+        <p>Too many matches, specify another filter.</p>
+      ) : selectedCountry ? (
+        // Jos käyttäjä on klikannut show-nappia, näytetään valittu maa
+        <CountryDetails country={selectedCountry} />
+      ) : filteredCountries.length === 1 ? (
+        // Jos vain yksi maa löytyy, näytetään se automaattisesti
+        <CountryDetails country={filteredCountries[0]} />
+      ) : (
+        <ul>
+          {/* Listataan maat, ja jokaisen nimen perään show-nappi */}
+          {filteredCountries.map((country) => (
+            <li key={country.cca3}>
+              {country.name.common}{' '}
+              <button onClick={() => setSelectedCountry(country)}>show</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export default App
