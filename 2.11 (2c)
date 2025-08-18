@@ -1,0 +1,120 @@
+import { useState, useEffect } from 'react'
+import axios from 'axios'
+
+// Filter-komponentti
+const Filter = ({ filter, handleFilterChange }) => {
+  return (
+    <div>
+      filter shown with: <input value={filter} onChange={handleFilterChange} />
+    </div>
+  )
+}
+
+// PersonForm-komponentti
+const PersonForm = ({ newName, newNumber, handleNameChange, handleNumberChange, handleSubmit }) => {
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        name: <input value={newName} onChange={handleNameChange} />
+      </div>
+      <div>
+        number: <input value={newNumber} onChange={handleNumberChange} />
+      </div>
+      <div>
+        <button type="submit">add</button>
+      </div>
+    </form>
+  )
+}
+
+// Persons-komponentti
+const Persons = ({ persons }) => {
+  return (
+    <ul>
+      {persons.map((person) => (
+        <li key={person.id}>
+          {person.name} {person.number}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// App-komponentti
+const App = () => {
+  const [persons, setPersons] = useState([]) // Alustetaan tyhjäksi, data haetaan palvelimelta
+  const [newName, setNewName] = useState('')
+  const [newNumber, setNewNumber] = useState('')
+  const [filter, setFilter] = useState('')
+
+  // Haetaan henkilöt JSON Serveriltä kun sovellus käynnistyy
+  useEffect(() => {
+    axios
+      .get('http://localhost:3001/persons')
+      .then(response => {
+        setPersons(response.data)
+      })
+  }, [])
+
+  // Lisää uusi henkilö
+  const handleSubmit = (event) => {
+    event.preventDefault()
+
+    if (persons.some(person => person.name === newName)) {
+      alert(`${newName} is already added to phonebook`)
+      return
+    }
+
+    const newPerson = {
+      name: newName,
+      number: newNumber,
+      id: (persons.length + 1).toString() // väliaikainen ID
+    }
+
+    setPersons(persons.concat(newPerson))
+    setNewName('')
+    setNewNumber('')
+  }
+
+  // Muutoksenkäsittelijät
+  const handleNameChange = (event) => {
+    setNewName(event.target.value)
+  }
+
+  const handleNumberChange = (event) => {
+    setNewNumber(event.target.value)
+  }
+
+  const handleFilterChange = (event) => {
+    setFilter(event.target.value)
+  }
+
+  // Suodatetaan näytettävät henkilöt
+  const personsToShow = persons.filter(person =>
+    person.name.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  return (
+    <div>
+      <h2>Phonebook</h2>
+
+      <Filter filter={filter} handleFilterChange={handleFilterChange} />
+
+      <h3>Add a new</h3>
+
+      <PersonForm
+        newName={newName}
+        newNumber={newNumber}
+        handleNameChange={handleNameChange}
+        handleNumberChange={handleNumberChange}
+        handleSubmit={handleSubmit}
+      />
+
+      <h3>Numbers</h3>
+
+      <Persons persons={personsToShow} />
+    </div>
+  )
+}
+
+export default App
