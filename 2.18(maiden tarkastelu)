@@ -1,0 +1,86 @@
+import { useState, useEffect } from 'react'  // React-hookit tilan ja sivuvaikutusten hallintaan
+import axios from 'axios'                     // HTTP-kirjasto API-kutsuihin
+
+const App = () => {
+  // Maat-taulukko, johon tallennetaan haettu data
+  const [countries, setCountries] = useState([])
+  // Hakukentän tila, johon käyttäjän syöte tallennetaan
+  const [filter, setFilter] = useState('')
+
+  // useEffect hakee kaikki maat vain kerran komponentin latautuessa
+  useEffect(() => {
+    axios
+      .get('https://studies.cs.helsinki.fi/restcountries/api/all') // API-pyyntö kaikille maille
+      .then((response) => setCountries(response.data))              // Onnistuneessa vastauksessa tallennetaan data
+      .catch((error) => {                                           // Virheen käsittely, tulostaa konsoliin
+        console.error('Failed to fetch countries:', error)
+      })
+  }, [])  // Tyhjä riippuvuuslista takaa suorituksen vain kerran
+
+  // Hakukentän arvon muutoksen käsittelijä
+  const handleFilterChange = (event) => {
+    setFilter(event.target.value) // Päivitetään filter-tila käyttäjän syötteellä
+  }
+
+  // Suodatetaan maat hakuehdon perusteella (case insensitive)
+  const filteredCountries = countries.filter((country) =>
+    country.name.common.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  // Yksittäisen maan tiedot
+  const CountryDetails = ({ country }) => {
+    // Haetaan maan kielet olion arvoina (arrayksi)
+    const languages = country.languages
+      ? Object.values(country.languages)
+      : []
+
+    return (
+      <div>
+        <h2>{country.name.common}</h2> {/* Maan nimi */}
+        <p>Capital: {country.capital ? country.capital[0] : 'N/A'}</p> {/* Pääkaupunki tai 'N/A' */}
+        <p>Population: {country.population.toLocaleString()}</p> {/* Väkiluku tuhaterottimin */}
+        <h3>Languages:</h3>
+        <ul>
+          {/* Kielet listana */}
+          {languages.map((lang) => (
+            <li key={lang}>{lang}</li>
+          ))}
+        </ul>
+        {/* Maan lippu */}
+        <img
+          src={country.flags.png}
+          alt={`Flag of ${country.name.common}`}
+          width="150"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <h1>Country search</h1>
+      <div>
+        {/* Hakukenttä kontrolloituna komponenttina */}
+        Find countries: <input value={filter} onChange={handleFilterChange} />
+      </div>
+
+      {/* Hakutulosten näyttö logiikka */}
+      {filter === '' ? (
+        <p>Type something to search countries</p>   // Jos tyhjä hakuehto
+      ) : filteredCountries.length > 10 ? (
+        <p>Too many matches, specify another filter.</p>  // Jos tuloksia yli 10
+      ) : filteredCountries.length === 1 ? (
+        <CountryDetails country={filteredCountries[0]} />   // Jos yksi maa löytyi, näytä tiedot
+      ) : (
+        <ul>
+          {/* Jos 2–10 maata, näytä niiden nimet listana */}
+          {filteredCountries.map((country) => (
+            <li key={country.cca3}>{country.name.common}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export default App
