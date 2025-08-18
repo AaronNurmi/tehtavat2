@@ -1,0 +1,196 @@
+import { useState, useEffect } from 'react'
+import personService from './services/persons' // Palvelumoduuli API-kutsuille
+
+// Ilmoituskomponentti näyttää viestin (onnistumis- tai virheilmoitus)
+const Notification = ({ message, type }) => {
+  if (message === null) return null
+
+  // Tyylit viestityypin mukaan: virheilmoitus punaisella, onnistumisviesti vihreällä
+  const style = {
+    color: type === 'error' ? 'red' : 'green',
+    background: '#ddd',
+    fontSize: 16,
+    borderStyle: 'solid',
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 10,
+  }
+
+  return <div style={style}>{message}</div>
+}
+
+// Hakukenttäkomponentti
+const Filter = ({ filter, handleFilterChange }) => (
+  <div>
+    filter shown with: <input value={filter} onChange={handleFilterChange} />
+  </div>
+)
+
+// Lomake uuden henkilön lisäämiseen
+const PersonForm = ({
+  newName,
+  newNumber,
+  handleNameChange,
+  handleNumberChange,
+  handleSubmit,
+}) => (
+  <form onSubmit={handleSubmit}>
+    <div>
+      name: <input value={newName} onChange={handleNameChange} />
+    </div>
+    <div>
+      number: <input value={newNumber} onChange={handleNumberChange} />
+    </div>
+    <div>
+      <button type="submit">add</button>
+    </div>
+  </form>
+)
+
+// Lista henkilöistä, jossa jokaisella on poistonappi
+const Persons = ({ persons, handleDelete }) => (
+  <ul>
+    {persons.map((person) => (
+      <li key={person.id}>
+        {person.name} {person.number}{' '}
+        <button onClick={() => handleDelete(person.id, person.name)}>delete</button>
+      </li>
+    ))}
+  </ul>
+)
+
+const App = () => {
+  // Sovelluksen tilat
+  const [persons, setPersons] = useState([]) // kaikki henkilöt
+  const [newName, setNewName] = useState('') // uusi nimi syöttökentässä
+  const [newNumber, setNewNumber] = useState('') // uusi numero syöttökentässä
+  const [filter, setFilter] = useState('') // suodatin hakukenttään
+
+  const [notification, setNotification] = useState(null) // ilmoitusviesti
+  const [notificationType, setNotificationType] = useState('success') // viestin tyyppi (success/error)
+
+  // Haetaan henkilöt palvelimelta heti komponentin mountin yhteydessä
+  useEffect(() => {
+    personService.getAll().then(initialPersons => setPersons(initialPersons))
+  }, [])
+
+  // Näyttää ilmoituksen ja piilottaa sen 5 sekunnin kuluttua
+  const showNotification = (message, type = 'success') => {
+    setNotification(message)
+    setNotificationType(type)
+    setTimeout(() => {
+      setNotification(null)
+    }, 5000)
+  }
+
+  // Lomakkeen lähetyksen käsittelijä (lisää tai päivittää henkilön)
+  const handleSubmit = (event) => {
+    event.preventDefault()
+
+    // Tarkistetaan, onko nimi jo olemassa
+    const existingPerson = persons.find(p => p.name === newName)
+
+    if (existingPerson) {
+      // Jos on, kysytään käyttäjältä lupaa päivittää numero
+      if (
+        window.confirm(
+          `${newName} is already added to phonebook, replace the old number with a new one?`
+        )
+      ) {
+        // Päivitetään henkilön numero palvelimelle PUT-pyynnöllä
+        const updatedPerson = { ...existingPerson, number: newNumber }
+        personService
+          .update(existingPerson.id, updatedPerson)
+          .then(returnedPerson => {
+            // Päivitetään tila uuden henkilön tiedoilla
+            setPersons(persons.map(p => (p.id !== existingPerson.id ? p : returnedPerson)))
+            // Tyhjennetään kentät
+            setNewName('')
+            setNewNumber('')
+            // Näytetään onnistumisilmoitus
+            showNotification(`Updated number for ${returnedPerson.name}`)
+          })
+          .catch(() => {
+            // Jos päivitys epäonnistui (esim. henkilö poistettu palvelimelta)
+            showNotification(`Information of ${newName} has already been removed from server`, 'error')
+            // Päivitetään tila siten, että poistettu henkilö ei enää näy
+            setPersons(persons.filter(p => p.id !== existingPerson.id))
+          })
+      }
+      return // Keskeytetään uuden henkilön lisääminen, koska kyseessä oli päivitys
+    }
+
+    // Lisätään uusi henkilö palvelimelle POST-pyynnöllä
+    const newPerson = { name: newName, number: newNumber }
+    personService
+      .create(newPerson)
+      .then(returnedPerson => {
+        // Päivitetään tila uuden henkilön tiedoilla
+        setPersons(persons.concat(returnedPerson))
+        // Tyhjennetään kentät
+        setNewName('')
+        setNewNumber('')
+        // Näytetään onnistumisilmoitus
+        showNotification(`Added ${returnedPerson.name}`)
+      })
+  }
+
+  // Poiston käsittelijä
+  const handleDelete = (id, name) => {
+    if (window.confirm(`Delete ${name}?`)) {
+      personService
+        .remove(id)
+        .then(() => {
+          // Päivitetään tila poistetun henkilön tiedoilla
+          setPersons(persons.filter(p => p.id !== id))
+          // Näytetään onnistumisilmoitus
+          showNotification(`Deleted ${name}`)
+        })
+        .catch(() => {
+          // Jos henkilö on jo poistettu palvelimelta, näytetään virheilmoitus
+          showNotification(`Information of ${name} has already been removed from server`, 'error')
+          setPersons(persons.filter(p => p.id !== id))
+        })
+    }
+  }
+
+  // Muutokset syöttökenttiin päivitetään tilaan
+  const handleNameChange = (event) => setNewName(event.target.value)
+  const handleNumberChange = (event) => setNewNumber(event.target.value)
+  const handleFilterChange = (event) => setFilter(event.target.value)
+
+  // Suodatetaan henkilöt näytettäviksi hakukentän arvon mukaan
+  const personsToShow = persons.filter(person =>
+    person.name.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  return (
+    <div>
+      <h2>Phonebook</h2>
+
+      {/* Ilmoitusalue */}
+      <Notification message={notification} type={notificationType} />
+
+      {/* Hakukenttä */}
+      <Filter filter={filter} handleFilterChange={handleFilterChange} />
+
+      <h3>Add a new</h3>
+
+      {/* Lomake uuden henkilön lisäämiseen */}
+      <PersonForm
+        newName={newName}
+        newNumber={newNumber}
+        handleNameChange={handleNameChange}
+        handleNumberChange={handleNumberChange}
+        handleSubmit={handleSubmit}
+      />
+
+      <h3>Numbers</h3>
+
+      {/* Näytettävät henkilöt */}
+      <Persons persons={personsToShow} handleDelete={handleDelete} />
+    </div>
+  )
+}
+
+export default App
